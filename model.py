@@ -24,7 +24,7 @@ import pdb
 
 
 class MLP(nn.Module):
-    def __init__(self, input_sizes, dropout_prob=0.2, bias=False):
+    def __init__(self, input_sizes, dropout_prob=0.5, bias=False):
         super(MLP, self).__init__()
         self.layers = nn.ModuleList()
         for i in range(1, len(input_sizes)):
@@ -153,6 +153,11 @@ class BertModelPlus(BertModel):
         )
         sequence_output = encoded_layers[-1]
         # pooled_output = self.pooler(sequence_output)
+
+
+        #print(encoded_layers[-1])
+        #print(encoded_layers[output_hidden])
+
         encoded_layers, hidden_layers = (
             encoded_layers[-1],
             encoded_layers[output_hidden],
@@ -198,6 +203,15 @@ class BertForMultiHopQuestionAnswering(PreTrainedBertModel):
         Returns:
             [type]: [description]
         """
+        # model = BertModel.from_pretrained('/home/shaoai/CogQA/uncased_L-2_H-128_A-2')
+        # outputs = model(input_ids)
+        # sequence_output = outputs[0]
+        # pooled_output = outputs[1]
+        # print(sequence_output.shape)
+        # print(pooled_output.shape)
+        # print(self.bert(
+        #     input_ids, token_type_ids, attention_mask
+        # ))
         batch_size = input_ids.size()[0]
         device = input_ids.get_device() if input_ids.is_cuda else torch.device("cpu")
         sequence_output, hidden_output = self.bert(
@@ -360,8 +374,13 @@ class CognitiveGNN(nn.Module):
 
 
 if __name__ == "__main__":
-    BERT_MODEL = "bert-base-uncased"
+
+    BERT_MODEL = 'bert-base-uncased'
     tokenizer = BertTokenizer.from_pretrained(BERT_MODEL, do_lower_case=True)
+
+    # BERT_MODEL = '/home/shaoai/CogQA/uncased_L-2_H-128_A-2'
+    # tokenizer = BertTokenizer.from_pretrained('/home/shaoai/CogQA/uncased_L-2_H-128_A-2')
+
     orig_text = "".join(
         [
             "Theatre Centre is a UK-based theatre company touring new plays for young audiences aged 4 to 18, founded in 1953 by Brian Way, the company has developed plays by writers including which British writer, dub poet and Rastafarian?",

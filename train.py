@@ -17,6 +17,20 @@ from pytorch_pretrained_bert.optimization import BertAdam
 from model import BertForMultiHopQuestionAnswering, CognitiveGNN
 from utils import warmup_linear, find_start_end_after_tokenized, find_start_end_before_tokenized, bundle_part_to_batch, judge_question_type, fuzzy_retrieve, WindowMean, fuzz
 from data import convert_question_to_samples_bundle, homebrew_data_loader
+from pytorch_transformers import BertTokenizer,BertModel
+from pytorch_pretrained_bert.modeling import (
+    BertPreTrainedModel as PreTrainedBertModel, # The name was changed in the new versions of pytorch_pretrained_bert
+    BertModel,
+    BertLayerNorm,
+    gelu,
+    BertEncoder,
+    BertPooler,
+)
+from pytorch_pretrained_bert.tokenization import (
+    whitespace_tokenize,
+    BasicTokenizer,
+    BertTokenizer,
+)
 
 
 def train(bundles, model1, device, mode, model2, batch_size, num_epoch, gradient_accumulation_steps, lr1, lr2, alpha):
@@ -117,15 +131,19 @@ def train(bundles, model1, device, mode, model2, batch_size, num_epoch, gradient
             except Exception as err:
                 traceback.print_exc()
                 if mode == 'bundle':   
-                    print(batch._id) 
+                    print(batch._id)
     return (model1, model2)
 
 
-def main(output_model_file = './models/bert-base-uncased.bin', load = False, mode = 'tensors', batch_size = 2,
+def main(output_model_file = './models/pytorch_model.bin', load = False, mode = 'tensors', batch_size = 4,
             num_epoch = 3, gradient_accumulation_steps = 1, lr1 = 1e-5, lr2 = 1e-5, alpha = 0.2):
     
     BERT_MODEL = 'bert-base-uncased' # bert-large is too large for ordinary GPU on task #2
     tokenizer = BertTokenizer.from_pretrained(BERT_MODEL, do_lower_case=True)
+    # BERT_MODEL = '/home/shaoai/CogQA/uncased_L-2_H-128_A-2'
+    # print(BERT_MODEL)
+    # tokenizer = BertTokenizer.from_pretrained('/home/shaoai/CogQA/uncased_L-2_H-128_A-2')
+
     with open('./hotpot_train_v1.1_refined.json' ,'r') as fin:
         dataset = json.load(fin)
     bundles = []
