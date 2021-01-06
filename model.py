@@ -219,6 +219,21 @@ class BertForMultiHopQuestionAnswering(PreTrainedBertModel):
         )
         semantics = hidden_output[:, 0]
         # Some shapes: sequence_output [batch_size, max_length, hidden_size], pooled_output [batch_size, hidden_size]
+        print("1" , batch_size , '\n')
+        print("2" , device , '\n')
+        print("3" , sequence_output , '\n')
+        print("3" , len(sequence_output) , '\n')
+        print("3", len(sequence_output[0]), '\n')
+        print("4" , hidden_output , '\n')
+        print("4", len(hidden_output), '\n')
+        print("4", len(hidden_output[0]), '\n')
+        print("5" , semantics , '\n')
+        print("5", len(semantics), '\n')
+        print("5", len(semantics[0]), '\n')
+        print("6", semantics.shape, '\n')
+        print("6", sequence_output.shape, '\n')
+        print("6", hidden_output.shape, '\n')
+
         if sep_positions is None:
             return semantics  # Only semantics, used in bundle forward
         else:

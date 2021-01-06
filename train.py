@@ -135,7 +135,7 @@ def train(bundles, model1, device, mode, model2, batch_size, num_epoch, gradient
     return (model1, model2)
 
 
-def main(output_model_file = './models/pytorch_model.bin', load = False, mode = 'tensors', batch_size = 4,
+def main(output_model_file = './models/pytorch_model.bin', load = False, mode = 'tensors', batch_size = 7,
             num_epoch = 3, gradient_accumulation_steps = 1, lr1 = 1e-5, lr2 = 1e-5, alpha = 0.2):
     
     BERT_MODEL = 'bert-base-uncased' # bert-large is too large for ordinary GPU on task #2
@@ -160,7 +160,9 @@ def main(output_model_file = './models/pytorch_model.bin', load = False, mode = 
         print('Loading model from {}'.format(output_model_file))
         model_state_dict = torch.load(output_model_file)
         model1 = BertForMultiHopQuestionAnswering.from_pretrained(BERT_MODEL, state_dict=model_state_dict['params1'])
+        print("6" , model1,'\n')
         model2 = CognitiveGNN(model1.config.hidden_size)
+        print("7" , model2,'\n')
         model2.load_state_dict(model_state_dict['params2'])
 
     else:
