@@ -5,6 +5,7 @@ from pytorch_pretrained_bert.modeling import (
     gelu,
     BertEncoder,
     BertPooler,
+
 )
 import torch
 from torch import nn
@@ -21,6 +22,8 @@ from pytorch_pretrained_bert.tokenization import (
 )
 import re
 import pdb
+from transformers import AlbertModel, AlbertTokenizer, RobertaModel, RobertaConfig, RobertaTokenizer, XLNetTokenizer, XLNetModel
+from transformers.modeling_albert import AlbertModel, AlbertPreTrainedModel
 
 
 class MLP(nn.Module):
@@ -165,12 +168,12 @@ class BertModelPlus(BertModel):
         return encoded_layers, hidden_layers
 
 
-class BertForMultiHopQuestionAnswering(PreTrainedBertModel):
+class BertForMultiHopQuestionAnswering(AlbertPreTrainedModel):
     def __init__(self, config):
         super(BertForMultiHopQuestionAnswering, self).__init__(config)
-        self.bert = BertModelPlus(config)
+        self.albert = AlbertModel(config)
         self.qa_outputs = nn.Linear(config.hidden_size, 4)
-        self.apply(self.init_bert_weights)
+        self.apply(self._init_weights)
 
     def forward(
         self,
@@ -214,25 +217,25 @@ class BertForMultiHopQuestionAnswering(PreTrainedBertModel):
         # ))
         batch_size = input_ids.size()[0]
         device = input_ids.get_device() if input_ids.is_cuda else torch.device("cpu")
-        sequence_output, hidden_output = self.bert(
+        sequence_output, hidden_output = self.albert(
             input_ids, token_type_ids, attention_mask
         )
         semantics = hidden_output[:, 0]
         # Some shapes: sequence_output [batch_size, max_length, hidden_size], pooled_output [batch_size, hidden_size]
-        print("1" , batch_size , '\n')
-        print("2" , device , '\n')
-        print("3" , sequence_output , '\n')
-        print("3" , len(sequence_output) , '\n')
-        print("3", len(sequence_output[0]), '\n')
-        print("4" , hidden_output , '\n')
-        print("4", len(hidden_output), '\n')
-        print("4", len(hidden_output[0]), '\n')
-        print("5" , semantics , '\n')
-        print("5", len(semantics), '\n')
-        print("5", len(semantics[0]), '\n')
-        print("6", semantics.shape, '\n')
-        print("6", sequence_output.shape, '\n')
-        print("6", hidden_output.shape, '\n')
+        # print("1" , batch_size , '\n')
+        # print("2" , device , '\n')
+        # print("3" , sequence_output , '\n')
+        # print("3" , len(sequence_output) , '\n')
+        # print("3", len(sequence_output[0]), '\n')
+        # print("4" , hidden_output , '\n')
+        # print("4", len(hidden_output), '\n')
+        # print("4", len(hidden_output[0]), '\n')
+        # print("5" , semantics , '\n')
+        # print("5", len(semantics), '\n')
+        # print("5", len(semantics[0]), '\n')
+        # print("6", semantics.shape, '\n')
+        # print("6", sequence_output.shape, '\n')
+        # print("6", hidden_output.shape, '\n')
 
         if sep_positions is None:
             return semantics  # Only semantics, used in bundle forward
@@ -390,8 +393,20 @@ class CognitiveGNN(nn.Module):
 
 if __name__ == "__main__":
 
-    BERT_MODEL = 'bert-base-uncased'
-    tokenizer = BertTokenizer.from_pretrained(BERT_MODEL, do_lower_case=True)
+    # BERT_MODEL = 'bert-base-uncased'
+    # tokenizer = BertTokenizer.from_pretrained(BERT_MODEL, do_lower_case=True)
+
+    # tokenizer = BertTokenizer.from_pretrained("./albert_base")
+    # BERT_MODEL = BertModel.from_pretrained("./albert_base")
+
+    tokenizer = AlbertTokenizer.from_pretrained('albert-base-v2', do_lower_case=True)
+    BERT_MODEL = 'albert-base-v2'
+
+    # tokenizer = RobertaTokenizer.from_pretrained('roberta-base', do_lower_case=True)
+    # BERT_MODEL = RobertaModel.from_pretrained('roberta-base')
+
+    # tokenizer = XLNetTokenizer.from_pretrained('xlnet-base-cased', do_lower_case=True)
+    # BERT_MODEL = 'xlnet-base-cased'
 
     # BERT_MODEL = '/home/shaoai/CogQA/uncased_L-2_H-128_A-2'
     # tokenizer = BertTokenizer.from_pretrained('/home/shaoai/CogQA/uncased_L-2_H-128_A-2')
