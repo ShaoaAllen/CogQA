@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="83c6c687-a353-4226-97f1-f2bcaaaf9530" name="172.18.45.3">
+        <fileTransfer rootFolder="/home/shaoai" accessType="SFTP" host="172.18.45.3" port="22" sshConfigId="41a2e8d3-77e0-40a1-8b47-1fdb1159670d" sshConfig="shaoai@172.18.45.3:22">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+      <webServer id="bb0a3cb2-c3a8-4a23-b1c5-fe6f19cd69ef" name="172.18.45.159">
+        <fileTransfer rootFolder="/home/shao" accessType="SFTP" host="172.18.45.159" port="22" sshConfigId="ddc4f447-6d4a-4e42-a0a6-8aba31a41b0f" sshConfig="shao@172.18.45.159:22 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

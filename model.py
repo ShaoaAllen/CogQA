@@ -5,10 +5,12 @@ from pytorch_pretrained_bert.modeling import (
     gelu,
     BertEncoder,
     BertPooler,
-
+    BertEmbeddings
 )
 import torch
 from torch import nn
+
+
 from utils import (
     fuzzy_find,
     find_start_end_after_tokenized,
@@ -22,8 +24,10 @@ from pytorch_pretrained_bert.tokenization import (
 )
 import re
 import pdb
-from transformers import AlbertModel, AlbertTokenizer, RobertaModel, RobertaConfig, RobertaTokenizer, XLNetTokenizer, XLNetModel
-from transformers.modeling_albert import AlbertModel, AlbertPreTrainedModel
+from transformers import RobertaModel, RobertaConfig, RobertaTokenizer, XLNetTokenizer, XLNetModel
+from transformers.models.albert.modeling_albert import AlbertTransformer, AlbertEmbeddings, AlbertModel, AlbertPreTrainedModel
+from transformers.models.albert.tokenization_albert import AlbertTokenizer
+from transformers.modeling_outputs import BaseModelOutputWithPooling
 
 
 class MLP(nn.Module):
@@ -168,12 +172,229 @@ class BertModelPlus(BertModel):
         return encoded_layers, hidden_layers
 
 
+class AlbertModelPlus(AlbertModel):
+    def __init__(self, config):
+        super(AlbertModel, self).__init__(config)
+        self.embeddings = AlbertEmbeddings(config)
+        self.encoder = AlbertTransformer(config)
+        self.pooler = nn.Linear(config.hidden_size, config.hidden_size)
+        self.pooler_activation = nn.Tanh()
+        #self.apply(self.init_bert_weights)
+        self.init_weights()
+
+
+    def forward(
+        self,
+        input_ids=None,
+        attention_mask=None,
+        token_type_ids=None,
+        position_ids=None,
+        head_mask=None,
+        inputs_embeds=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        return_dict=None,
+        output_hidden=-4
+    ):
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        )
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+
+        if input_ids is not None and inputs_embeds is not None:
+            raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
+        elif input_ids is not None:
+            input_shape = input_ids.size()
+        elif inputs_embeds is not None:
+            input_shape = inputs_embeds.size()[:-1]
+        else:
+            raise ValueError("You have to specify either input_ids or inputs_embeds")
+
+        device = input_ids.device if input_ids is not None else inputs_embeds.device
+
+        if attention_mask is None:
+            attention_mask = torch.ones(input_shape, device=device)
+        if token_type_ids is None:
+            token_type_ids = torch.zeros(input_shape, dtype=torch.long, device=device)
+
+        extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
+        extended_attention_mask = extended_attention_mask.to(dtype=self.dtype)  # fp16 compatibility
+        extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
+        head_mask = self.get_head_mask(head_mask, self.config.num_hidden_layers)
+
+        embedding_output = self.embeddings(
+            input_ids, position_ids=position_ids, token_type_ids=token_type_ids, inputs_embeds=inputs_embeds
+        )
+        encoder_outputs = self.encoder(
+            embedding_output,
+            extended_attention_mask,
+            head_mask=head_mask,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict,
+        )
+
+        sequence_output = encoder_outputs[0]
+
+        pooled_output = self.pooler_activation(self.pooler(sequence_output[:, 0])) if self.pooler is not None else None
+
+        if not return_dict:
+            return (sequence_output, pooled_output) + encoder_outputs[1:]
+
+        # return BaseModelOutputWithPooling(
+        #     last_hidden_state=sequence_output,
+        #     pooler_output=pooled_output,
+        #     hidden_states=encoder_outputs.hidden_states,
+        #     attentions=encoder_outputs.attentions,
+        # )
+        encoded_layers = encoder_outputs[0]
+        hidden_layers = encoder_outputs[0][-4]
+        return encoded_layers, hidden_layers
+
+# class BertForMultiHopQuestionAnswering(PreTrainedBertModel):
+#     def __init__(self, config):
+#         super(BertForMultiHopQuestionAnswering, self).__init__(config)
+#         self.bert = BertModelPlus(config)
+#         self.qa_outputs = nn.Linear(config.hidden_size, 4)
+#         self.apply(self.init_bert_weights)
+#
+#     def forward(
+#             self,
+#             input_ids,
+#             token_type_ids=None,
+#             attention_mask=None,
+#             sep_positions=None,
+#             hop_start_weights=None,
+#             hop_end_weights=None,
+#             ans_start_weights=None,
+#             ans_end_weights=None,
+#             B_starts=None,
+#             allow_limit=(0, 0),
+#     ):
+#         """ Extract spans by System 1.
+#
+#         Args:
+#             input_ids (LongTensor): Token ids of word-pieces. (batch_size * max_length)
+#             token_type_ids (LongTensor): The A/B Segmentation in BERTs. (batch_size * max_length)
+#             attention_mask (LongTensor): Indicating whether the position is a token or padding. (batch_size * max_length)
+#             sep_positions (LongTensor): Positions of [SEP] tokens, mainly used in finding the num_sen of supporing facts. (batch_size * max_seps)
+#             hop_start_weights (Tensor): The ground truth of the probability of hop start positions. The weight of sample has been added on the ground truth.
+#                 (You can verify it by examining the gradient of binary cross entropy.)
+#             hop_end_weights ([Tensor]): The ground truth of the probability of hop end positions.
+#             ans_start_weights ([Tensor]): The ground truth of the probability of ans start positions.
+#             ans_end_weights ([Tensor]): The ground truth of the probability of ans end positions.
+#             B_starts (LongTensor): Start positions of sentence B.
+#             allow_limit (tuple, optional): An Offset for negative threshold. Defaults to (0, 0).
+#
+#         Returns:
+#             [type]: [description]
+#         """
+#         batch_size = input_ids.size()[0]
+#         device = input_ids.get_device() if input_ids.is_cuda else torch.device("cpu")
+#         sequence_output, hidden_output = self.bert(
+#             input_ids, token_type_ids, attention_mask
+#         )
+#         semantics = hidden_output[:, 0]
+#         # Some shapes: sequence_output [batch_size, max_length, hidden_size], pooled_output [batch_size, hidden_size]
+#         if sep_positions is None:
+#             return semantics  # Only semantics, used in bundle forward
+#         else:
+#             max_sep = sep_positions.size()[-1]
+#         if max_sep == 0:
+#             empty = torch.zeros(batch_size, 0, dtype=torch.long, device=device)
+#             return (
+#                 empty,
+#                 empty,
+#                 semantics,
+#                 empty,
+#             )  # Only semantics, used in eval, the same ``empty'' variable is a mistake in general cases but simple
+#
+#         # Predict spans
+#         logits = self.qa_outputs(sequence_output)
+#         hop_start_logits, hop_end_logits, ans_start_logits, ans_end_logits = logits.split(
+#             1, dim=-1
+#         )
+#         hop_start_logits = hop_start_logits.squeeze(-1)
+#         hop_end_logits = hop_end_logits.squeeze(-1)
+#         ans_start_logits = ans_start_logits.squeeze(-1)
+#         ans_end_logits = ans_end_logits.squeeze(-1)  # Shape: [batch_size, max_length]
+#
+#         if hop_start_weights is not None:  # Train mode
+#             lgsf = torch.nn.LogSoftmax(
+#                 dim=1
+#             )  # If there is no targeted span in the sentence, start_weights = end_weights = 0(vec)
+#             hop_start_loss = -torch.sum(
+#                 hop_start_weights * lgsf(hop_start_logits), dim=-1
+#             )
+#             hop_end_loss = -torch.sum(hop_end_weights * lgsf(hop_end_logits), dim=-1)
+#             ans_start_loss = -torch.sum(
+#                 ans_start_weights * lgsf(ans_start_logits), dim=-1
+#             )
+#             ans_end_loss = -torch.sum(ans_end_weights * lgsf(ans_end_logits), dim=-1)
+#             hop_loss = torch.mean((hop_start_loss + hop_end_loss)) / 2
+#             ans_loss = torch.mean((ans_start_loss + ans_end_loss)) / 2
+#         else:
+#             # In eval mode, find the exact top K spans.
+#             K_hop, K_ans = 3, 1
+#             hop_preds = torch.zeros(
+#                 batch_size, K_hop, 3, dtype=torch.long, device=device
+#             )  # (start, end, sen_num)
+#             ans_preds = torch.zeros(
+#                 batch_size, K_ans, 3, dtype=torch.long, device=device
+#             )
+#             ans_start_gap = torch.zeros(batch_size, device=device)
+#             for u, (start_logits, end_logits, preds, K, allow) in enumerate(
+#                     (
+#                             (
+#                                     hop_start_logits,
+#                                     hop_end_logits,
+#                                     hop_preds,
+#                                     K_hop,
+#                                     allow_limit[0],
+#                             ),
+#                             (
+#                                     ans_start_logits,
+#                                     ans_end_logits,
+#                                     ans_preds,
+#                                     K_ans,
+#                                     allow_limit[1],
+#                             ),
+#                     )
+#             ):
+#                 for i in range(batch_size):
+#                     if sep_positions[i, 0] > 0:
+#                         values, indices = start_logits[i, B_starts[i]:].topk(K)
+#                         for k, index in enumerate(indices):
+#                             if values[k] <= start_logits[i, 0] - allow:  # not golden
+#                                 if u == 1:  # For ans spans
+#                                     ans_start_gap[i] = start_logits[i, 0] - values[k]
+#                                 break
+#                             start = index + B_starts[i]
+#                             # find ending
+#                             for j, ending in enumerate(sep_positions[i]):
+#                                 if ending > start or ending <= 0:
+#                                     break
+#                             if ending <= start:
+#                                 break
+#                             ending = min(ending, start + 10)
+#                             end = torch.argmax(end_logits[i, start:ending]) + start
+#                             preds[i, k, 0] = start
+#                             preds[i, k, 1] = end
+#                             preds[i, k, 2] = j
+#         return (
+#             (hop_loss, ans_loss, semantics)
+#             if hop_start_weights is not None
+#             else (hop_preds, ans_preds, semantics, ans_start_gap)
+#         )
+
+
 class BertForMultiHopQuestionAnswering(AlbertPreTrainedModel):
     def __init__(self, config):
         super(BertForMultiHopQuestionAnswering, self).__init__(config)
-        self.albert = AlbertModel(config)
+        self.albert = AlbertModelPlus(config)
         self.qa_outputs = nn.Linear(config.hidden_size, 4)
-        self.apply(self._init_weights)
+        self._init_weights = self._init_weights
 
     def forward(
         self,
@@ -189,20 +410,20 @@ class BertForMultiHopQuestionAnswering(AlbertPreTrainedModel):
         allow_limit=(0, 0),
     ):
         """ Extract spans by System 1.
-        
+
         Args:
             input_ids (LongTensor): Token ids of word-pieces. (batch_size * max_length)
             token_type_ids (LongTensor): The A/B Segmentation in BERTs. (batch_size * max_length)
             attention_mask (LongTensor): Indicating whether the position is a token or padding. (batch_size * max_length)
             sep_positions (LongTensor): Positions of [SEP] tokens, mainly used in finding the num_sen of supporing facts. (batch_size * max_seps)
-            hop_start_weights (Tensor): The ground truth of the probability of hop start positions. The weight of sample has been added on the ground truth. 
+            hop_start_weights (Tensor): The ground truth of the probability of hop start positions. The weight of sample has been added on the ground truth.
                 (You can verify it by examining the gradient of binary cross entropy.)
             hop_end_weights ([Tensor]): The ground truth of the probability of hop end positions.
             ans_start_weights ([Tensor]): The ground truth of the probability of ans start positions.
             ans_end_weights ([Tensor]): The ground truth of the probability of ans end positions.
             B_starts (LongTensor): Start positions of sentence B.
             allow_limit (tuple, optional): An Offset for negative threshold. Defaults to (0, 0).
-        
+
         Returns:
             [type]: [description]
         """
